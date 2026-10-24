@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Legend Tech | Smart Technology. Better Business.</title>
+  <meta name="description" content="Legend Tech offers website design, digital products, tech consulting, and AI tools for growing businesses.">
+  <meta name="theme-color" content="#000000">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to content</a>
+
+  <!-- ===== 1. NAVBAR ===== -->
+  <header class="navbar">
+    <div class="container nav-inner">
+      <a href="#home" class="logo" aria-label="Legend Tech home">Legend<span>Tech</span></a>
+      <button id="menu-toggle" class="menu-toggle" aria-label="Open menu" aria-expanded="false" aria-controls="nav-links">
+        <span></span><span></span><span></span>
+      </button>
+      <nav id="nav-links" class="nav-links" aria-label="Main">
+        <a href="#services">Services</a>
+        <a href="#products">Products</a>
+        <a href="#about">About</a>
+        <a href="#contact" class="btn btn-small">Contact</a>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main">
+    <!-- ===== 2. HERO ===== -->
+    <section id="home" class="hero">
+      <div class="container hero-inner">
+        <p class="eyebrow">Welcome to Legend Tech</p>
+        <h1>Smart Technology. <span class="accent">Better Business.</span></h1>
+        <!-- ===== 3. SHORT INTRODUCTION ===== -->
+        <p class="lead">
+          We help small and growing businesses get online and work smarter with
+          clean websites, useful digital products, practical tech advice, and
+          simple AI tools.
+        </p>
+        <div class="hero-actions">
+          <a href="#services" class="btn">Explore Services</a>
+          <a href="#contact" class="btn btn-outline">Get in Touch</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== 4. SERVICES (cards are built in script.js from SERVICES list) ===== -->
+    <section id="services" class="section">
+      <div class="container">
+        <h2 class="section-title">Our <span class="accent">Services</span></h2>
+        <p class="section-sub">Tap "Inquire" on any service to message us on WhatsApp.</p>
+        <div id="services-grid" class="grid"></div>
+      </div>
+    </section>
+
+    <!-- ===== 5. PRODUCTS (cards are built in script.js from PRODUCTS list) ===== -->
+    <section id="products" class="section alt">
+      <div class="container">
+        <h2 class="section-title">Featured <span class="accent">Products</span></h2>
+        <p class="section-sub">Sample products and prices. Edit them in script.js.</p>
+        <div id="products-grid" class="grid"></div>
+        <p class="note">Orders are arranged by message. This site does not process payments.</p>
+      </div>
+    </section>
+
+    <!-- ===== 6. ABOUT ===== -->
+    <section id="about" class="section">
+      <div class="container about">
+        <div>
+          <h2 class="section-title left">About <span class="accent">Us</span></h2>
+          <p>
+            Legend Tech is a technology business built around one idea: good
+            technology should be simple, affordable, and useful.
+          </p>
+          <p>
+            We focus on clear communication, clean design, and tools that solve
+            real problems. Replace this text with your own story.
+          </p>
+        </div>
+        <ul class="values">
+          <li><strong>Simple</strong> Clear solutions, no jargon.</li>
+          <li><strong>Reliable</strong> We do what we say.</li>
+          <li><strong>Modern</strong> Fast, mobile-friendly work.</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ===== 7. CONTACT ===== -->
+    <section id="contact" class="section alt">
+      <div class="container">
+        <h2 class="section-title">Contact <span class="accent">Us</span></h2>
+        <p class="section-sub">Reach us directly, or fill in the form below.</p>
+
+        <div class="contact-grid">
+          <div class="contact-info">
+            <a id="email-link" class="btn btn-outline" href="#">Email us</a>
+            <a id="whatsapp-link" class="btn" href="#" target="_blank" rel="noopener">Chat on WhatsApp</a>
+          </div>
+
+          <form id="contact-form" class="form" novalidate>
+            <div class="field">
+              <label for="name">Your name</label>
+              <input id="name" name="name" type="text" autocomplete="name" required>
+              <small class="error" id="name-error" role="alert"></small>
+            </div>
+            <div class="field">
+              <label for="email">Your email</label>
+              <input id="email" name="email" type="email" autocomplete="email" required>
+              <small class="error" id="email-error" role="alert"></small>
+            </div>
+            <div class="field">
+              <label for="message">Message</label>
+              <textarea id="message" name="message" rows="5" required></textarea>
+              <small class="error" id="message-error" role="alert"></small>
+            </div>
+            <button type="submit" class="btn">Check &amp; Prepare Message</button>
+
+            <!-- Honest notice: this form cannot deliver messages by itself -->
+            <p class="notice">
+              <strong>Important:</strong> this form has no backend, so it cannot
+              send messages by itself. After you submit, you can open your email
+              app with the message ready to send. To receive messages directly,
+              the site owner must connect a free form service (see script.js).
+            </p>
+            <div id="form-result" class="form-result" aria-live="polite"></div>
+          </form>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- ===== 8. FOOTER ===== -->
+  <footer class="footer">
+    <div class="container footer-inner">
+      <p>&copy; <span id="year"></span> Legend Tech. All rights reserved.</p>
+      <ul id="social-links" class="social" aria-label="Social media"></ul>
+    </div>
+  </footer>
+
+  <script src="script.js"></script>
+</body>
+</html>
