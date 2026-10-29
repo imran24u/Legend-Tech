@@ -1,144 +1,339 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Legend Tech | Smart Technology. Better Business.</title>
-  <meta name="description" content="Legend Tech offers website design, digital products, tech consulting, and AI tools for growing businesses.">
-  <meta name="theme-color" content="#000000">
-  <link rel="stylesheet" href="style.css">
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>GameHub X — Wormhole</title>
+<style>
+  html, body { margin:0; padding:0; background:#000; }
+  body { height:100%; overflow-x:hidden; }
+  #scene { position:fixed; inset:0; width:100vw; height:100vh; display:block; z-index:0; }
+  #scroll-host { height:560vh; position:relative; z-index:-1; }
+  #scroll-hint { position:fixed; z-index:1; left:50%; bottom:18px; transform:translateX(-50%); color:rgba(255,255,255,.55); font:11px/1.2 Arial,sans-serif; letter-spacing:.18em; text-transform:uppercase; pointer-events:none; }
+</style>
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://unpkg.com/three@0.143.0/build/three.module.js",
+    "three/addons/": "https://unpkg.com/three@0.143.0/examples/jsm/"
+  }
+}
+</script>
 </head>
 <body>
-  <a class="skip-link" href="#main">Skip to content</a>
+<canvas id="scene"></canvas>
+<div id="scroll-host"></div>
+<div id="scroll-hint">scroll ↓</div>
+<script type="module">
+import * as THREE from 'three';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+import { GammaCorrectionShader } from 'three/addons/shaders/GammaCorrectionShader.js';
+import { CopyShader } from 'three/addons/shaders/CopyShader.js';
 
-  <!-- ===== 1. NAVBAR ===== -->
-  <header class="navbar">
-    <div class="container nav-inner">
-      <a href="#home" class="logo" aria-label="Legend Tech home">Legend<span>Tech</span></a>
-      <button id="menu-toggle" class="menu-toggle" aria-label="Open menu" aria-expanded="false" aria-controls="nav-links">
-        <span></span><span></span><span></span>
-      </button>
-      <nav id="nav-links" class="nav-links" aria-label="Main">
-        <a href="#services">Services</a>
-        <a href="#products">Products</a>
-        <a href="#about">About</a>
-        <a href="#contact" class="btn btn-small">Contact</a>
-      </nav>
-    </div>
-  </header>
+const Lerp = (a, b, t) => a + (b - a) * t;
+const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+function hexToVec3(hex) {
+  const n = parseInt(hex.slice(1), 16);
+  return new THREE.Vector3(((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255);
+}
 
-  <main id="main">
-    <!-- ===== 2. HERO ===== -->
-    <section id="home" class="hero">
-      <div class="container hero-inner">
-        <p class="eyebrow">Welcome to Legend Tech</p>
-        <h1>Smart Technology. <span class="accent">Better Business.</span></h1>
-        <!-- ===== 3. SHORT INTRODUCTION ===== -->
-        <p class="lead">
-          We help small and growing businesses get online and work smarter with
-          clean websites, useful digital products, practical tech advice, and
-          simple AI tools.
-        </p>
-        <div class="hero-actions">
-          <a href="#services" class="btn">Explore Services</a>
-          <a href="#contact" class="btn btn-outline">Get in Touch</a>
-        </div>
-      </div>
-    </section>
+const LAYERS = { NONE:0, TORUS_SCENE:1, BLOOM_SCENE:2, ENTIRE_SCENE:3 };
+const canvas = document.getElementById('scene');
+const renderer = new THREE.WebGL1Renderer({ canvas, antialias:true, alpha:false });
+let dpr = window.devicePixelRatio || 1;
+renderer.setPixelRatio(dpr);
+renderer.setSize(window.innerWidth, window.innerHeight, false);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.VSMShadowMap;
 
-    <!-- ===== 4. SERVICES (cards are built in script.js from SERVICES list) ===== -->
-    <section id="services" class="section">
-      <div class="container">
-        <h2 class="section-title">Our <span class="accent">Services</span></h2>
-        <p class="section-sub">Tap "Inquire" on any service to message us on WhatsApp.</p>
-        <div id="services-grid" class="grid"></div>
-      </div>
-    </section>
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x000000);
+scene.fog = new THREE.Fog(0x000000, 0, 15);
+const camera = new THREE.PerspectiveCamera(45, window.innerWidth/window.innerHeight, 0.1, 400);
+camera.position.set(0,0,20);
+camera.layers.enable(LAYERS.TORUS_SCENE);
+camera.layers.enable(LAYERS.BLOOM_SCENE);
+camera.layers.enable(LAYERS.ENTIRE_SCENE);
+scene.add(camera);
 
-    <!-- ===== 5. PRODUCTS (cards are built in script.js from PRODUCTS list) ===== -->
-    <section id="products" class="section alt">
-      <div class="container">
-        <h2 class="section-title">Featured <span class="accent">Products</span></h2>
-        <p class="section-sub">Sample products and prices. Edit them in script.js.</p>
-        <div id="products-grid" class="grid"></div>
-        <p class="note">Orders are arranged by message. This site does not process payments.</p>
-      </div>
-    </section>
+const FinalPass = {
+  uniforms: {
+    iTime: { value: 0 },
+    tDiffuse: { value: null }, torusTexture: { value: null }, bloomTexture: { value: null }, haloTexture: { value: null },
+    uBg: { value: hexToVec3('#0a0524') },
+    uFlameA: { value: hexToVec3('#2bf0ff') },
+    uFlameB: { value: hexToVec3('#7a3cff') },
+    uFlameAmt: { value: 0.2 }
+  },
+  vertexShader: `varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position, 1.0); }`,
+  fragmentShader: `
+    uniform float iTime; uniform sampler2D tDiffuse; uniform sampler2D bloomTexture; uniform sampler2D torusTexture; uniform sampler2D haloTexture;
+    uniform vec3 uBg; uniform vec3 uFlameA; uniform vec3 uFlameB; uniform float uFlameAmt;
+    varying vec2 vUv;
+    vec3 warp3d(vec3 pos, float t){ float curv=.8,a=1.9,b=0.7; pos*=2.;
+      pos.x+=curv*sin(t+a*pos.y)+t*b; pos.y+=curv*cos(t+a*pos.x);
+      pos.y+=curv*sin(t+a*pos.z)+t*b; pos.z+=curv*cos(t+a*pos.y);
+      pos.z+=curv*sin(t+a*pos.x)+t*b; pos.x+=curv*cos(t+a*pos.z);
+      return 0.5+0.5*cos(pos.xyz+vec3(1,2,4)); }
+    void main(){
+      vec2 uv = 2.*vUv - 1.;
+      vec3 w = pow(warp3d(vec3(uv.x, sin(uv.y), uv.y), iTime*1.5), vec3(1.5));
+      vec3 flame = 1.5*uFlameA*w.x; flame*=w.y; flame += uFlameB*w.z;
+      flame *= smoothstep(0.25, 1., abs(uv.y));
+      float md = smoothstep(-0.7, 1., -uv.y*uv.x); flame *= md*md;
+      vec3 bg = uBg * (1.0 - 0.4 * length(uv));
+      vec3 halo = texture2D(haloTexture, vUv).xyz;
+      gl_FragColor = vec4(bg + flame*uFlameAmt + texture2D(bloomTexture, vUv).xyz + texture2D(torusTexture, vUv).xyz + texture2D(tDiffuse, vUv).xyz + halo, 1.);
+    }
+  `
+};
 
-    <!-- ===== 6. ABOUT ===== -->
-    <section id="about" class="section">
-      <div class="container about">
-        <div>
-          <h2 class="section-title left">About <span class="accent">Us</span></h2>
-          <p>
-            Legend Tech is a technology business built around one idea: good
-            technology should be simple, affordable, and useful.
-          </p>
-          <p>
-            We focus on clear communication, clean design, and tools that solve
-            real problems. Replace this text with your own story.
-          </p>
-        </div>
-        <ul class="values">
-          <li><strong>Simple</strong> Clear solutions, no jargon.</li>
-          <li><strong>Reliable</strong> We do what we say.</li>
-          <li><strong>Modern</strong> Fast, mobile-friendly work.</li>
-        </ul>
-      </div>
-    </section>
+const renderScene = new RenderPass(scene, camera);
+const torusComposer = new EffectComposer(renderer);
+torusComposer.renderToScreen = false;
+torusComposer.addPass(renderScene);
+torusComposer.addPass(new ShaderPass(GammaCorrectionShader));
+torusComposer.addPass(new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.22, 0.2, 0));
+torusComposer.addPass(new ShaderPass(CopyShader));
 
-    <!-- ===== 7. CONTACT ===== -->
-    <section id="contact" class="section alt">
-      <div class="container">
-        <h2 class="section-title">Contact <span class="accent">Us</span></h2>
-        <p class="section-sub">Reach us directly, or fill in the form below.</p>
+const bloomComposer = new EffectComposer(renderer);
+bloomComposer.renderToScreen = false;
+bloomComposer.addPass(renderScene);
+bloomComposer.addPass(new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.7, 0.6, 0));
+bloomComposer.addPass(new ShaderPass(GammaCorrectionShader));
 
-        <div class="contact-grid">
-          <div class="contact-info">
-            <a id="email-link" class="btn btn-outline" href="#">Email us</a>
-            <a id="whatsapp-link" class="btn" href="#" target="_blank" rel="noopener">Chat on WhatsApp</a>
-          </div>
+const finalPass = new ShaderPass(FinalPass);
+finalPass.uniforms.bloomTexture.value = bloomComposer.renderTarget1.texture;
+finalPass.uniforms.torusTexture.value = torusComposer.renderTarget1.texture;
+const finalComposer = new EffectComposer(renderer);
+finalComposer.addPass(renderScene);
+finalComposer.addPass(finalPass);
 
-          <form id="contact-form" class="form" novalidate>
-            <div class="field">
-              <label for="name">Your name</label>
-              <input id="name" name="name" type="text" autocomplete="name" required>
-              <small class="error" id="name-error" role="alert"></small>
-            </div>
-            <div class="field">
-              <label for="email">Your email</label>
-              <input id="email" name="email" type="email" autocomplete="email" required>
-              <small class="error" id="email-error" role="alert"></small>
-            </div>
-            <div class="field">
-              <label for="message">Message</label>
-              <textarea id="message" name="message" rows="5" required></textarea>
-              <small class="error" id="message-error" role="alert"></small>
-            </div>
-            <button type="submit" class="btn">Check &amp; Prepare Message</button>
+const SNOISE = `
+vec4 permute(vec4 x){return mod(((x*34.0)+1.0)*x, 289.0);}
+vec4 taylorInvSqrt(vec4 r){return 1.79284291400159 - 0.85373472095314 * r;}
+float snoise(vec3 v){
+  const vec2 C = vec2(1.0/6.0, 1.0/3.0); const vec4 D = vec4(0.0, 0.5, 1.0, 2.0);
+  vec3 i = floor(v + dot(v, C.yyy)); vec3 x0 = v - i + dot(i, C.xxx);
+  vec3 g = step(x0.yzx, x0.xyz); vec3 l = 1.0 - g;
+  vec3 i1 = min(g.xyz, l.zxy); vec3 i2 = max(g.xyz, l.zxy);
+  vec3 x1 = x0 - i1 + 1.0 * C.xxx; vec3 x2 = x0 - i2 + 2.0 * C.xxx; vec3 x3 = x0 - 1.0 + 3.0 * C.xxx;
+  i = mod(i, 289.0);
+  vec4 p = permute(permute(permute(i.z + vec4(0.0, i1.z, i2.z, 1.0)) + i.y + vec4(0.0, i1.y, i2.y, 1.0)) + i.x + vec4(0.0, i1.x, i2.x, 1.0));
+  float n_ = 1.0/7.0; vec3 ns = n_ * D.wyz - D.xzx;
+  vec4 j = p - 49.0 * floor(p * ns.z *ns.z);
+  vec4 x_ = floor(j * ns.z); vec4 y_ = floor(j - 7.0 * x_);
+  vec4 x = x_ *ns.x + ns.yyyy; vec4 y = y_ *ns.x + ns.yyyy; vec4 h = 1.0 - abs(x) - abs(y);
+  vec4 b0 = vec4(x.xy, y.xy); vec4 b1 = vec4(x.zw, y.zw);
+  vec4 s0 = floor(b0)*2.0 + 1.0; vec4 s1 = floor(b1)*2.0 + 1.0; vec4 sh = -step(h, vec4(0.0));
+  vec4 a0 = b0.xzyw + s0.xzyw*sh.xxyy; vec4 a1 = b1.xzyw + s1.xzyw*sh.zzww;
+  vec3 p0 = vec3(a0.xy,h.x); vec3 p1 = vec3(a0.zw,h.y); vec3 p2 = vec3(a1.xy,h.z); vec3 p3 = vec3(a1.zw,h.w);
+  vec4 norm = taylorInvSqrt(vec4(dot(p0,p0), dot(p1,p1), dot(p2,p2), dot(p3,p3)));
+  p0 *= norm.x; p1 *= norm.y; p2 *= norm.z; p3 *= norm.w;
+  vec4 m = max(0.5 - vec4(dot(x0,x0), dot(x1,x1), dot(x2,x2), dot(x3,x3)), 0.0); m = m * m;
+  return 42.0 * dot(m*m, vec4(dot(p0,x0), dot(p1,x1), dot(p2,x2), dot(p3,x3)));
+}`;
 
-            <!-- Honest notice: this form cannot deliver messages by itself -->
-            <p class="notice">
-              <strong>Important:</strong> this form has no backend, so it cannot
-              send messages by itself. After you submit, you can open your email
-              app with the message ready to send. To receive messages directly,
-              the site owner must connect a free form service (see script.js).
-            </p>
-            <div id="form-result" class="form-result" aria-live="polite"></div>
-          </form>
-        </div>
-      </div>
-    </section>
-  </main>
+const uniforms = {
+  uTime: { value: 0 }, uAppear: { value: 0 },
+  uColLow: { value: hexToVec3('#180a3a') }, uColHigh: { value: hexToVec3('#2bf0ff') },
+  uOpacity: { value: 1.44 }, uSize: { value: 5 }, uBrightness: { value: 0.4 },
+  uSwirl: { value: 0.39 }, uScale: { value: 0.17 },
+  uCursor: { value: new THREE.Vector3() }, uRepelRadius: { value: 2.4 },
+  uRepelStrength: { value: 0.8 }, uActivity: { value: 0 }
+};
+const tunnelVertexShader = `
+uniform float uTime; uniform float uSize; uniform float uSwirl; uniform float uScale;
+uniform vec3 uColLow; uniform vec3 uColHigh;
+uniform vec3 uCursor; uniform float uRepelRadius; uniform float uRepelStrength; uniform float uActivity;
+varying float vFade; varying vec3 vColor;
+${SNOISE}
+void main() {
+  vec3 wp = vec3(position.x * 7.0, 0.0, position.z * 25.0);
+  wp.x += position.y * 6.0;
+  float wn = snoise(vec3(wp.x * 0.08, wp.z * 0.08, uTime * 0.15)) * 2.0;
+  wn += snoise(vec3(wp.x * 0.16, wp.z * 0.16, uTime * 0.3)) * 0.8;
+  float tunnelR = 12.0;
+  float currentSliceRadius = sqrt(max(0.0, 17.64 - position.z * position.z));
+  float maxSliceWidth = 9.2195 * currentSliceRadius;
+  float normalizedX = wp.x / (maxSliceWidth + 0.001);
+  float tunnelAngle = normalizedX * 3.14159265;
+  float jitterAngle = snoise(vec3(position.x * 15.0, position.y * 15.0, uTime * 0.1)) * 0.35;
+  float jitterZ = snoise(vec3(position.y * 15.0, position.z * 15.0, uTime * 0.1)) * 4.0;
+  float ambientSwirl = snoise(vec3(position.x * 5.0, position.y * 5.0, uTime * 0.2)) * 3.0;
+  tunnelAngle += jitterAngle + ambientSwirl * uSwirl;
+  float dynamicR = tunnelR - wn;
+  vec3 tunnelPos = vec3(dynamicR * sin(tunnelAngle), -dynamicR * cos(tunnelAngle), wp.z + jitterZ);
+  vec3 finalPos = tunnelPos * uScale;
+  vec4 modelPosition = modelMatrix * vec4(finalPos, 1.0);
+  vec3 toP = modelPosition.xyz - uCursor;
+  float cd = length(toP);
+  float fall = smoothstep(uRepelRadius, 0.0, cd);
+  modelPosition.xyz += normalize(toP + vec3(0.0001)) * fall * uRepelStrength * uActivity;
+  vec4 mvPosition = viewMatrix * modelPosition;
+  float colMix = smoothstep(-3.0, 3.0, position.y + position.x * 0.5);
+  vColor = mix(uColLow, uColHigh, clamp(colMix, 0.0, 1.0));
+  vFade = 1.0;
+  gl_PointSize = uSize * (10.0 / -mvPosition.z);
+  gl_PointSize = max(gl_PointSize, 1.5);
+  gl_Position = projectionMatrix * mvPosition;
+}`;
+const tunnelFragmentShader = `
+uniform float uOpacity; uniform float uBrightness; uniform float uAppear;
+varying float vFade; varying vec3 vColor;
+void main() {
+  vec2 xy = gl_PointCoord - 0.5;
+  float ll = length(xy);
+  if (ll > 0.5) discard;
+  float a = smoothstep(0.5, 0.1, ll);
+  gl_FragColor = vec4(vColor * uBrightness, vFade * a * uOpacity * uAppear);
+}`;
 
-  <!-- ===== 8. FOOTER ===== -->
-  <footer class="footer">
-    <div class="container footer-inner">
-      <p>&copy; <span id="year"></span> Legend Tech. All rights reserved.</p>
-      <ul id="social-links" class="social" aria-label="Social media"></ul>
-    </div>
-  </footer>
+const tunnelGeometry = new THREE.SphereGeometry(4.2, 200, 600);
+const tunnelMaterial = new THREE.ShaderMaterial({
+  uniforms, vertexShader:tunnelVertexShader, fragmentShader:tunnelFragmentShader,
+  transparent:true, depthWrite:false, blending:THREE.AdditiveBlending
+});
+const group = new THREE.Group();
+const tunnelPoints = new THREE.Points(tunnelGeometry, tunnelMaterial);
+tunnelPoints.frustumCulled = false;
+// Include the points in all three render layers so the separated bloom passes can see them.
+tunnelPoints.layers.enable(LAYERS.TORUS_SCENE);
+tunnelPoints.layers.enable(LAYERS.BLOOM_SCENE);
+tunnelPoints.layers.enable(LAYERS.ENTIRE_SCENE);
+group.add(tunnelPoints);
+scene.add(group);
 
-  <script src="script.js"></script>
+const N = 300;
+const positions = new Float32Array(N * 3), sizes = new Float32Array(N), seeds = new Float32Array(N);
+for (let i = 0; i < N; i++) {
+  positions[i*3] = 2*Math.random()-1; positions[i*3+1] = 2*Math.random()-1; positions[i*3+2] = 2*Math.random()-1;
+  sizes[i] = 24 * (0.4 + Math.random()); seeds[i] = Math.random();
+}
+const atmoGeometry = new THREE.BufferGeometry();
+atmoGeometry.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+atmoGeometry.setAttribute('size', new THREE.Float32BufferAttribute(sizes, 1));
+atmoGeometry.setAttribute('seed', new THREE.Float32BufferAttribute(seeds, 1));
+const atmoMaterial = new THREE.ShaderMaterial({
+  transparent:true, blending:THREE.AdditiveBlending, depthWrite:false, depthTest:false,
+  uniforms: {
+    uTime: { value: 0 }, uColor: { value: hexToVec3('#8fe6ff') },
+    uRes: { value: new THREE.Vector2(window.innerWidth * dpr, window.innerHeight * dpr) }
+  },
+  vertexShader: `
+    attribute float size; attribute float seed; uniform float uTime; uniform vec2 uRes;
+    varying float vA;
+    vec3 warp(vec3 p, float t){ float c=0.9,a=1.9,b=0.02,s=0.05; p*=2.;
+      p.x+=c*sin(s*t+a*p.y)+t*b; p.y+=c*cos(s*t+a*p.x); p.y+=c*sin(s*t+a*p.z)+t*b;
+      p.z+=c*cos(s*t+a*p.y); p.z+=c*sin(s*t+a*p.x)+t*b; p.x+=c*cos(s*t+a*p.z);
+      return cos(p+vec3(1,2,4)); }
+    void main(){
+      vec3 v = position*4.0 + warp(position, uTime)*1.2;
+      vec4 mv = modelViewMatrix * vec4(v, 1.0);
+      float r = length(v); float farF = 1.0 - smoothstep(5.0, 6.5, r); float nearF = smoothstep(0.0, 0.5, -mv.z);
+      vA = farF * nearF;
+      gl_PointSize = size * uRes.y / 900.0 / -mv.z; gl_PointSize = max(gl_PointSize, 1.0);
+      gl_Position = projectionMatrix * mv;
+    }`,
+  fragmentShader: `
+    uniform vec3 uColor; varying float vA;
+    void main(){ vec2 p = gl_PointCoord - 0.5; float l = length(p); if (l > 0.5) discard;
+      float tex = smoothstep(0.5, 0.0, l); gl_FragColor = vec4(uColor * tex, tex * vA * 0.6); }`
+});
+const atmoPoints = new THREE.Points(atmoGeometry, atmoMaterial);
+atmoPoints.frustumCulled = false;
+atmoPoints.layers.enable(LAYERS.TORUS_SCENE);
+atmoPoints.layers.enable(LAYERS.BLOOM_SCENE);
+atmoPoints.layers.enable(LAYERS.ENTIRE_SCENE);
+scene.add(atmoPoints);
+atmoPoints.onBeforeRender = () => {
+  const t = performance.now()/1000;
+  atmoMaterial.uniforms.uTime.value = t * 1.0 * 8.0;
+  atmoPoints.position.copy(camera.position);
+  finalPass.uniforms.iTime.value = t;
+};
+
+const POINTER = { active:false, lastMove:0, activity:0, world:new THREE.Vector3() };
+const mouseTarget = new THREE.Vector2(0,0), mouse = new THREE.Vector2(0,0);
+window.addEventListener('mousemove', (e) => {
+  mouseTarget.x = e.clientX/window.innerWidth*2-1;
+  mouseTarget.y = -(e.clientY/window.innerHeight*2-1);
+  POINTER.active = true; POINTER.lastMove = performance.now();
+});
+window.addEventListener('mouseout', (e) => { if (!e.relatedTarget) POINTER.active = false; });
+const _ndc = new THREE.Vector3(), _dir = new THREE.Vector3(), _tgt = new THREE.Vector3();
+function updatePointerWorld() {
+  _tgt.set(0,0,0);
+  if (POINTER.active) {
+    _ndc.set(mouse.x, mouse.y, 0.5).unproject(camera);
+    _dir.copy(_ndc).sub(camera.position).normalize();
+    const dn = _dir.z;
+    if (Math.abs(dn) > 1e-4) {
+      const tt = -camera.position.z/dn;
+      if (tt > 0 && Number.isFinite(tt)) _tgt.copy(camera.position).addScaledVector(_dir, tt);
+    }
+  }
+  POINTER.world.lerp(_tgt, 0.12);
+  const idle = (performance.now() - POINTER.lastMove)/1000;
+  POINTER.activity += (((POINTER.active && idle < 3) ? 1 : 0) - POINTER.activity) * 0.06;
+}
+
+let scrollTarget = 0, scrollSmooth = 0, scrollCurrent = 0;
+function updateScrollTarget() { scrollTarget = clamp(window.scrollY / Math.max(1, document.documentElement.scrollHeight - window.innerHeight), 0, 1); }
+window.addEventListener('scroll', updateScrollTarget, { passive:true });
+
+const sceneObj = {
+  t0: performance.now()/1000,
+  rollPhase: 0,
+  appearStart: performance.now(),
+  render(scroll, m) {
+    const t = performance.now()/1000;
+    const dt = Math.min(0.05, t - this.t0); this.t0 = t;
+    uniforms.uTime.value = t;
+    camera.position.set(m.x * 0.12, m.y * 0.12, 20 - scroll * 34);
+    camera.lookAt(m.x * 0.6, m.y * 0.6, camera.position.z - 12);
+    updatePointerWorld();
+    uniforms.uSwirl.value = 0.39 * (1 + scroll * 1.5);
+    this.rollPhase += dt * (0.065 + scroll * 0.05);
+    group.rotation.z = this.rollPhase;
+    uniforms.uCursor.value.copy(POINTER.world);
+    uniforms.uActivity.value = POINTER.activity;
+    const elapsed = (performance.now() - this.appearStart)/1000;
+    uniforms.uAppear.value = Math.max(0, Math.min(1, (elapsed - 0.2)/1.4));
+  }
+};
+
+function resize() {
+  const w = window.innerWidth, h = window.innerHeight;
+  dpr = window.devicePixelRatio || 1;
+  renderer.setPixelRatio(dpr);
+  renderer.setSize(w, h, false);
+  camera.aspect = w/h; camera.updateProjectionMatrix();
+  for (const composer of [torusComposer, bloomComposer, finalComposer]) {
+    composer.setPixelRatio(dpr); composer.setSize(w, h);
+  }
+  atmoMaterial.uniforms.uRes.value.set(w*dpr, h*dpr);
+  updateScrollTarget();
+}
+window.addEventListener('resize', resize);
+resize();
+updateScrollTarget();
+
+function render() {
+  requestAnimationFrame(render);
+  scrollSmooth = Lerp(scrollSmooth, scrollTarget, 0.10);
+  scrollCurrent = Lerp(scrollCurrent, scrollSmooth, 0.06);
+  mouse.x = Lerp(mouse.x, mouseTarget.x, 0.06);
+  mouse.y = Lerp(mouse.y, mouseTarget.y, 0.06);
+  sceneObj.render(scrollCurrent, mouse);
+  camera.layers.set(LAYERS.TORUS_SCENE); torusComposer.render();
+  camera.layers.set(LAYERS.BLOOM_SCENE); bloomComposer.render();
+  camera.layers.set(LAYERS.ENTIRE_SCENE); finalComposer.render();
+}
+render();
+</script>
 </body>
 </html>
